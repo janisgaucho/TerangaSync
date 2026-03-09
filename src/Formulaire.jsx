@@ -9,6 +9,9 @@ export default function Formulaire({ user }) {
   const [listeVillages, setListeVillages] = useState([])
   const [listeVarietes, setListeVarietes] = useState([])
 
+  // --- ÉTAT POUR LE MODE HORS-LIGNE ---
+  const [offlineQueue, setOfflineQueue] = useState([])
+
   // --- ÉTATS POUR LES CHOIX DE L'UTILISATEUR ---
   const [paysId, setPaysId] = useState('')
   const [regionId, setRegionId] = useState('')
@@ -23,15 +26,61 @@ export default function Formulaire({ user }) {
 
   // Chargement initial (Pays et Variétés)
   useEffect(() => {
-    chargerPaysEtVarietes()
+    chargerDonneesReferentiel()
+    
+    // Charger les données en attente depuis le stockage local de la tablette
+    const savedQueue = localStorage.getItem('teranga_offline_queue')
+    if (savedQueue) setOfflineQueue(JSON.parse(savedQueue))
+
+    // Écouteur pour recharger automatiquement quand on repasse en ligne
+    const handleOnline = () => {
+      console.log("Connexion rétablie : Mise à jour du référentiel...")
+      chargerDonneesReferentiel()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
   }, [])
 
-  async function chargerPaysEtVarietes() {
-    const { data: paysData } = await supabase.from('pays').select('*')
-    if (paysData) setListePays(paysData)
+  // Charge tout le référentiel (Pays, Régions, Communes, Villages, Variétés)
+  // et le met en cache pour le mode hors-ligne
+  async function chargerDonneesReferentiel() {
+    // 1. Charger depuis le cache local (priorité offline)
+    const cachedPays = localStorage.getItem('ref_pays')
+    const cachedVarietes = localStorage.getItem('ref_variete')
+    
+    if (cachedPays) setListePays(JSON.parse(cachedPays))
+    if (cachedVarietes) setListeVarietes(JSON.parse(cachedVarietes))
 
-    const { data: varietesData } = await supabase.from('variete').select('*')
-    if (varietesData) setListeVarietes(varietesData)
+    // 2. Si en ligne, on télécharge TOUT pour mettre à jour le cache
+    if (navigator.onLine) {
+      try {
+        console.log("Mise à jour du référentiel local...");
+
+        const { data: pays, error: paysError } = await supabase.from('pays').select('*');
+        if (paysError) console.error("Erreur chargement pays:", paysError);
+        else if (pays) { localStorage.setItem('ref_pays', JSON.stringify(pays)); setListePays(pays); }
+
+        const { data: regions, error: regionsError } = await supabase.from('region').select('*');
+        if (regionsError) console.error("Erreur chargement régions:", regionsError);
+        else if (regions) localStorage.setItem('ref_regions', JSON.stringify(regions));
+
+        const { data: communes, error: communesError } = await supabase.from('commune').select('*');
+        if (communesError) console.error("Erreur chargement communes:", communesError);
+        else if (communes) localStorage.setItem('ref_communes', JSON.stringify(communes));
+
+        const { data: villages, error: villagesError } = await supabase.from('village').select('*');
+        if (villagesError) console.error("Erreur chargement villages:", villagesError);
+        else if (villages) localStorage.setItem('ref_villages', JSON.stringify(villages));
+
+        const { data: varietes, error: varietesError } = await supabase.from('variete').select('*');
+        if (varietesError) console.error("Erreur chargement variétés:", varietesError);
+        else if (varietes) { localStorage.setItem('ref_variete', JSON.stringify(varietes)); setListeVarietes(varietes); }
+
+      } catch (error) {
+        // This would catch network errors, not Supabase API errors which are handled above.
+        console.error("Erreur réseau lors du chargement du référentiel:", error);
+      }
+    }
   }
 
   // Fonctions de chargement en cascade
@@ -40,8 +89,18 @@ export default function Formulaire({ user }) {
     setListeRegions([]); setListeCommunes([]); setListeVillages([]);
     
     if (!id_pays) return;
-    const { data } = await supabase.from('region').select('*').eq('pays_id', id_pays)
-    if (data) setListeRegions(data)
+    
+    // Utilisation du cache local pour le mode offline
+    const cachedRegions = localStorage.getItem('ref_regions')
+    if (cachedRegions) {
+      const regions = JSON.parse(cachedRegions).filter(r => r.pays_id == id_pays)
+      setListeRegions(regions)
+    }
+    
+    if (navigator.onLine) {
+      const { data } = await supabase.from('region').select('*').eq('pays_id', id_pays)
+      if (data) setListeRegions(data)
+    }
   }
 
   async function chargerCommunes(id_region) {
@@ -49,8 +108,17 @@ export default function Formulaire({ user }) {
     setListeCommunes([]); setListeVillages([]);
     
     if (!id_region) return;
-    const { data } = await supabase.from('commune').select('*').eq('region_id', id_region)
-    if (data) setListeCommunes(data)
+
+    const cachedCommunes = localStorage.getItem('ref_communes')
+    if (cachedCommunes) {
+      const communes = JSON.parse(cachedCommunes).filter(c => c.region_id == id_region)
+      setListeCommunes(communes)
+    }
+    
+    if (navigator.onLine) {
+      const { data } = await supabase.from('commune').select('*').eq('region_id', id_region)
+      if (data) setListeCommunes(data)
+    }
   }
 
   async function chargerVillages(id_commune) {
@@ -58,8 +126,67 @@ export default function Formulaire({ user }) {
     setListeVillages([]);
     
     if (!id_commune) return;
-    const { data } = await supabase.from('village').select('*').eq('commune_id', id_commune)
-    if (data) setListeVillages(data)
+
+    const cachedVillages = localStorage.getItem('ref_villages')
+    if (cachedVillages) {
+      const villages = JSON.parse(cachedVillages).filter(v => v.commune_id == id_commune)
+      setListeVillages(villages)
+    }
+    
+    if (navigator.onLine) {
+      const { data } = await supabase.from('village').select('*').eq('commune_id', id_commune)
+      if (data) setListeVillages(data)
+    }
+  }
+
+  // Fonction pour synchroniser les données locales vers Supabase
+  const synchroniserTout = async () => {
+    if (!navigator.onLine) {
+      alert("Pas de connexion internet détectée. Impossible de synchroniser.")
+      return
+    }
+
+    let successCount = 0
+    const remaining = []
+
+    for (const item of offlineQueue) {
+      try {
+        // 1. Création Parcelle
+        const { data: parcelleData, error: parcelleError } = await supabase
+          .from('parcelle')
+          .insert([{ 
+            village_id: item.village_id, 
+            surface_totale_hectares: item.surface,
+            nom_ou_reference: `Parcelle Offline ${new Date(item.date_saisie).toLocaleDateString()}`
+          }])
+          .select().single()
+        
+        if (parcelleError) throw parcelleError
+
+        // 2. Création Récolte
+        const { error: recolteError } = await supabase
+          .from('recolte')
+          .insert([{
+            parcelle_id: parcelleData.id,
+            variete_id: item.variete_id,
+            quantite_kg: item.quantite_kg,
+            surface_utilisee_hectares: item.surface,
+            date_saisie: item.date_saisie,
+            user_id: item.user_id
+          }])
+
+        if (recolteError) throw recolteError
+        successCount++
+
+      } catch (error) {
+        console.error("Erreur synchro item:", item, error)
+        remaining.push(item) // On garde ceux qui ont échoué
+      }
+    }
+
+    setOfflineQueue(remaining)
+    localStorage.setItem('teranga_offline_queue', JSON.stringify(remaining))
+    alert(`${successCount} récoltes synchronisées avec succès !`)
   }
 
   // Validation du formulaire
@@ -70,6 +197,29 @@ export default function Formulaire({ user }) {
     let quantiteFinaleEnKg = parseFloat(quantite)
     if (unite === 'tonnes') {
       quantiteFinaleEnKg = quantiteFinaleEnKg * 1000
+    }
+
+    // GESTION MODE HORS-LIGNE
+    if (!navigator.onLine) {
+      const offlineData = {
+        village_id: villageId,
+        variete_id: varieteId,
+        quantite_kg: quantiteFinaleEnKg,
+        surface: parseFloat(surface),
+        date_saisie: new Date().toISOString(),
+        user_id: user.id,
+        // Métadonnées pour l'affichage local
+        nom_village: listeVillages.find(v => v.id == villageId)?.nom,
+        nom_variete: listeVarietes.find(v => v.id == varieteId)?.nom
+      }
+
+      const newQueue = [...offlineQueue, offlineData]
+      setOfflineQueue(newQueue)
+      localStorage.setItem('teranga_offline_queue', JSON.stringify(newQueue))
+      
+      alert("⚠️ Pas de connexion : Récolte sauvegardée sur la tablette. Pensez à synchroniser plus tard !")
+      setQuantite(''); setSurface(''); setVarieteId('');
+      return
     }
 
     try {
@@ -115,13 +265,34 @@ export default function Formulaire({ user }) {
 
   return (
     <form onSubmit={soumettreRecolte} className="space-y-6">
+      
+      {/* BANDEAU DE SYNCHRONISATION (Visible seulement si des données sont en attente) */}
+      {offlineQueue.length > 0 && (
+        <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-4 flex justify-between items-center animate-pulse">
+          <div>
+            <p className="font-bold">Mode Hors-Ligne</p>
+            <p className="text-sm">{offlineQueue.length} récolte(s) en attente d'envoi.</p>
+          </div>
+          <button type="button" onClick={synchroniserTout} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded">
+            🔄 Synchroniser maintenant
+          </button>
+        </div>
+      )}
+
       <div className="bg-green-50 p-4 rounded-lg border border-green-100">
         <h3 className="text-lg font-bold text-green-800 mb-4">📍 Localisation</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* PAYS */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Pays</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Pays
+              {listePays.length === 0 && (
+                <button type="button" onClick={chargerDonneesReferentiel} className="ml-2 text-xs text-green-600 underline hover:text-green-800">
+                  🔄 Recharger la liste
+                </button>
+              )}
+            </label>
             <select required value={paysId} onChange={(e) => chargerRegions(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border">
               <option value="">-- Choisir un pays --</option>
               {listePays.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}

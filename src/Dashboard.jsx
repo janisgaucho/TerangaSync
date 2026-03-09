@@ -2,33 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
-import L from 'leaflet'
-
-// Correction des icônes Leaflet par défaut qui buggent souvent avec les bundlers comme Vite
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Création de l'icône personnalisée avec animation Tailwind
-const createBlinkingIcon = () => {
-  return L.divIcon({
-    className: 'bg-transparent border-none', // Supprime le carré blanc par défaut de Leaflet
-    html: `
-      <div class="relative flex h-6 w-6 items-center justify-center">
-        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-        <span class="relative inline-flex rounded-full h-3 w-3 bg-green-600 border-2 border-white shadow-sm"></span>
-      </div>
-    `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12], // Centre l'icône sur les coordonnées
-    popupAnchor: [0, -12] // La popup s'ouvre un peu au-dessus
-  })
-}
+import Carte from './Carte'
 
 // Fonction utilitaire pour convertir le format Hexadécimal PostGIS (WKB) en Lat/Lng
 const parsePostGISCoordinates = (hexString) => {
@@ -246,31 +220,7 @@ export default function Dashboard({ onLoginClick, isPublic = true }) {
         {/* Carte Interactive */}
         <div className="bg-white shadow rounded-lg p-6 mb-8">
           <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Carte des Récoltes</h3>
-          <div className="h-96 w-full rounded-lg overflow-hidden border border-gray-200">
-            <MapContainer center={[14.4974, -14.4524]} zoom={7} style={{ height: '100%', width: '100%' }}>
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {mapMarkers.map((marker, idx) => (
-                <Marker 
-                  key={idx} 
-                  position={[marker.lat, marker.lng]}
-                  icon={createBlinkingIcon()}
-                  eventHandlers={{
-                    click: () => handleMarkerClick(marker.nom),
-                  }}
-                >
-                  <Popup>
-                    <div className="text-center">
-                      <strong className="text-green-700 text-lg">{marker.nom}</strong><br />
-                      Production : <span className="font-bold">{marker.kilos} kg</span>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          </div>
+          <Carte villages={mapMarkers} onVillageSelect={handleMarkerClick} />
         </div>
 
         {/* Graphiques */}
