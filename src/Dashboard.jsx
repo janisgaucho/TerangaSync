@@ -33,7 +33,7 @@ const parsePostGISCoordinates = (hexString) => {
   }
 }
 
-export default function Dashboard({ onLoginClick, isPublic = true }) {
+export default function Dashboard({ onLoginClick, isPublic = true, userRole }) {
   const [loading, setLoading] = useState(true)
   const [statsVillage, setStatsVillage] = useState([])
   const [statsVariete, setStatsVariete] = useState([])
@@ -43,6 +43,11 @@ export default function Dashboard({ onLoginClick, isPublic = true }) {
   const [totalRecolte, setTotalRecolte] = useState(0)
 
   useEffect(() => {
+    // Sécurité : si ce n'est pas la vue publique, on vérifie le rôle
+    if (!isPublic && !['manager', 'gestionnaire', 'gerant'].includes(userRole)) {
+      setLoading(false); // Arrêter le chargement
+      return; // Ne pas charger les données
+    }
     fetchData()
   }, [])
 
@@ -162,6 +167,13 @@ export default function Dashboard({ onLoginClick, isPublic = true }) {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
   if (loading) return <div className="text-center p-10 text-gray-500">Chargement des données publiques...</div>
+
+  // Message d'accès refusé si le rôle n'est pas bon (double sécurité)
+  if (!isPublic && !['manager', 'gestionnaire', 'gerant'].includes(userRole)) {
+    return <div className="text-center p-10 text-red-500 bg-red-50 rounded-lg mx-auto max-w-3xl">
+      <h2 className="font-bold">Accès Refusé</h2>
+      <p>Votre rôle ne vous autorise pas à consulter cette page.</p></div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

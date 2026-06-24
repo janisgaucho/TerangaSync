@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { useMemo } from 'react'
 
 export default function Formulaire({ user }) {
   // --- ÉTATS POUR LES LISTES DÉROULANTES ---
@@ -7,6 +8,11 @@ export default function Formulaire({ user }) {
   const [listeRegions, setListeRegions] = useState([])
   const [listeCommunes, setListeCommunes] = useState([])
   const [listeVillages, setListeVillages] = useState([])
+  // --- NOUVEAU : États pour le cache en mémoire ---
+  const [allRegions, setAllRegions] = useState([]);
+  const [allCommunes, setAllCommunes] = useState([]);
+  const [allVillages, setAllVillages] = useState([]);
+
   const [listeVarietes, setListeVarietes] = useState([])
 
   // --- ÉTAT POUR LE MODE HORS-LIGNE ---
@@ -58,23 +64,38 @@ export default function Formulaire({ user }) {
 
         const { data: pays, error: paysError } = await supabase.from('pays').select('*');
         if (paysError) console.error("Erreur chargement pays:", paysError);
-        else if (pays) { localStorage.setItem('ref_pays', JSON.stringify(pays)); setListePays(pays); }
+        else if (pays) { 
+          localStorage.setItem('ref_pays', JSON.stringify(pays)); 
+          setListePays(pays); 
+        }
 
         const { data: regions, error: regionsError } = await supabase.from('region').select('*');
         if (regionsError) console.error("Erreur chargement régions:", regionsError);
-        else if (regions) localStorage.setItem('ref_regions', JSON.stringify(regions));
+        else if (regions) {
+          setAllRegions(regions); // Mise en cache mémoire
+          localStorage.setItem('ref_regions', JSON.stringify(regions));
+        }
 
         const { data: communes, error: communesError } = await supabase.from('commune').select('*');
         if (communesError) console.error("Erreur chargement communes:", communesError);
-        else if (communes) localStorage.setItem('ref_communes', JSON.stringify(communes));
+        else if (communes) {
+          setAllCommunes(communes); // Mise en cache mémoire
+          localStorage.setItem('ref_communes', JSON.stringify(communes));
+        }
 
         const { data: villages, error: villagesError } = await supabase.from('village').select('*');
         if (villagesError) console.error("Erreur chargement villages:", villagesError);
-        else if (villages) localStorage.setItem('ref_villages', JSON.stringify(villages));
+        else if (villages) {
+          setAllVillages(villages); // Mise en cache mémoire
+          localStorage.setItem('ref_villages', JSON.stringify(villages));
+        }
 
         const { data: varietes, error: varietesError } = await supabase.from('variete').select('*');
         if (varietesError) console.error("Erreur chargement variétés:", varietesError);
-        else if (varietes) { localStorage.setItem('ref_variete', JSON.stringify(varietes)); setListeVarietes(varietes); }
+        else if (varietes) { 
+          localStorage.setItem('ref_variete', JSON.stringify(varietes)); 
+          setListeVarietes(varietes); 
+        }
 
       } catch (error) {
         // This would catch network errors, not Supabase API errors which are handled above.
@@ -83,60 +104,41 @@ export default function Formulaire({ user }) {
     }
   }
 
-  // Fonctions de chargement en cascade
-  async function chargerRegions(id_pays) {
+  // Fonctions de chargement en cascade (optimisées)
+  function chargerRegions(id_pays) {
     setPaysId(id_pays); setRegionId(''); setCommuneId(''); setVillageId('');
     setListeRegions([]); setListeCommunes([]); setListeVillages([]);
     
     if (!id_pays) return;
     
-    // Utilisation du cache local pour le mode offline
-    const cachedRegions = localStorage.getItem('ref_regions')
-    if (cachedRegions) {
-      const regions = JSON.parse(cachedRegions).filter(r => r.pays_id == id_pays)
-      setListeRegions(regions)
-    }
-    
-    if (navigator.onLine) {
-      const { data } = await supabase.from('region').select('*').eq('pays_id', id_pays)
-      if (data) setListeRegions(data)
-    }
+    const paysIdNum = parseInt(id_pays, 10);
+    // On filtre la liste complète des régions déjà en mémoire
+    const regionsFiltrees = allRegions.filter(r => r.pays_id === paysIdNum);
+    setListeRegions(regionsFiltrees);
   }
 
-  async function chargerCommunes(id_region) {
+  function chargerCommunes(id_region) {
     setRegionId(id_region); setCommuneId(''); setVillageId('');
     setListeCommunes([]); setListeVillages([]);
     
     if (!id_region) return;
 
-    const cachedCommunes = localStorage.getItem('ref_communes')
-    if (cachedCommunes) {
-      const communes = JSON.parse(cachedCommunes).filter(c => c.region_id == id_region)
-      setListeCommunes(communes)
-    }
-    
-    if (navigator.onLine) {
-      const { data } = await supabase.from('commune').select('*').eq('region_id', id_region)
-      if (data) setListeCommunes(data)
-    }
+    const regionIdNum = parseInt(id_region, 10);
+    // On filtre la liste complète des communes déjà en mémoire
+    const communesFiltrees = allCommunes.filter(c => c.region_id === regionIdNum);
+    setListeCommunes(communesFiltrees);
   }
 
-  async function chargerVillages(id_commune) {
+  function chargerVillages(id_commune) {
     setCommuneId(id_commune); setVillageId('');
     setListeVillages([]);
     
     if (!id_commune) return;
 
-    const cachedVillages = localStorage.getItem('ref_villages')
-    if (cachedVillages) {
-      const villages = JSON.parse(cachedVillages).filter(v => v.commune_id == id_commune)
-      setListeVillages(villages)
-    }
-    
-    if (navigator.onLine) {
-      const { data } = await supabase.from('village').select('*').eq('commune_id', id_commune)
-      if (data) setListeVillages(data)
-    }
+    const communeIdNum = parseInt(id_commune, 10);
+    // On filtre la liste complète des villages déjà en mémoire
+    const villagesFiltres = allVillages.filter(v => v.commune_id === communeIdNum);
+    setListeVillages(villagesFiltres);
   }
 
   // Fonction pour synchroniser les données locales vers Supabase
