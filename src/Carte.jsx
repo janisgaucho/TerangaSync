@@ -62,7 +62,6 @@ export default function Carte({ villages, onVillageSelect, zoom = 7 }) {
         >
           {villages.map((village, idx) => {
             const markerProps = {
-              key: idx,
               position: [village.lat, village.lng],
               icon: createBlinkingIcon(),
             };
@@ -72,7 +71,7 @@ export default function Carte({ villages, onVillageSelect, zoom = 7 }) {
             }
 
             return (
-            <Marker {...markerProps}>
+            <Marker key={idx} {...markerProps}>
               {onVillageSelect && (
                 <Popup>
                   <div className="text-center">

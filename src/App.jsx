@@ -12,6 +12,7 @@ import VillagePage from './VillagePage'
 import SaisieRecoltePage from './SaisieRecoltePage'
 import HistoriquePersonnelPage from './HistoriquePersonnelPage'
 import LandingPage from './LandingPage'
+import MonComptePage from './MonComptePage'
 import MainLayout from './MainLayout'
 
 function App() {
@@ -30,7 +31,7 @@ function App() {
       if (user) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('role, prenom, commune_id, region_id')
+          .select('role, prenom, nom_famille, commune_id, region_id')
           .eq('id', user.id)
           .single()
         
@@ -200,11 +201,12 @@ function App() {
         <Route element={<MainLayout profile={profile} loading={loading} onLogout={handleLogout} />}>
           <Route path="/benevole" element={profile.role === 'benevole' ? <BenevoleDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />          
           <Route path="/gestionnaire" element={['gestionnaire', 'gerant'].includes(profile.role) ? <GestionnaireDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
-          <Route path="/region/:id" element={<RegionPage profile={profile} />} />
-          <Route path="/commune/:id" element={<CommunePage profile={profile} />} />
-          <Route path="/village/:id" element={<VillagePage profile={profile} />} />
+          <Route path="/region/:id" element={<RegionPage profile={profile} user={session.user} />} />
+          <Route path="/commune/:id" element={<CommunePage profile={profile} user={session.user} />} />
+          <Route path="/village/:id" element={<VillagePage profile={profile} user={session.user} />} />
           <Route path="/saisir-recolte" element={<SaisieRecoltePage user={session.user} profile={profile} />} />
           <Route path="/historique-personnel" element={<HistoriquePersonnelPage user={session.user} />} />
+          <Route path="/mon-compte" element={<MonComptePage profile={profile} user={session.user} />} />
           {/* Ajoutez ici les routes pour manager, gerant, etc. */}
           <Route path="/manager" element={profile.role === 'manager' ? <ManagerDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
         </Route>

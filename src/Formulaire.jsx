@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function Formulaire({ user, profile }) {
+export default function Formulaire({ user, profile, pageContext }) {
   // --- ÉTATS POUR LES LISTES DÉROULANTES ---
   const [listePays, setListePays] = useState([])
   const [listeRegions, setListeRegions] = useState([])
@@ -48,14 +48,20 @@ export default function Formulaire({ user, profile }) {
 
   // NOUVEAU : Effet pour pré-remplir le formulaire en fonction du profil
   useEffect(() => {
-    if (profile) {
+    // La priorité est au contexte de la page
+    if (pageContext) {
       const paysSénégal = 1; // On assume que le Sénégal a l'ID 1
       setPaysId(paysSénégal);
-
+      if (pageContext.regionId) setRegionId(pageContext.regionId);
+      if (pageContext.communeId) setCommuneId(pageContext.communeId);
+      if (pageContext.villageId) setVillageId(pageContext.villageId);
+    } else if (profile) {
+      // Sinon, on se base sur le profil de l'utilisateur (comportement existant)
+      const paysSénégal = 1;
+      setPaysId(paysSénégal);
       if (profile.role === 'manager' && profile.region?.id) {
         setRegionId(profile.region.id);
       }
-      
       if (profile.role === 'benevole' && profile.commune?.id) {
         // Pour le bénévole, il faut trouver la région de sa commune
         const communeInfo = JSON.parse(localStorage.getItem('ref_communes') || '[]').find(c => c.id === profile.commune.id);
@@ -65,7 +71,7 @@ export default function Formulaire({ user, profile }) {
         }
       }
     }
-  }, [profile]);
+  }, [profile, pageContext]);
 
   // Mise à jour des listes en cascade lorsque les IDs sont pré-remplis
   useEffect(() => {
@@ -317,14 +323,20 @@ export default function Formulaire({ user, profile }) {
             <p className="font-bold">Mode Hors-Ligne</p>
             <p className="text-sm">{offlineQueue.length} récolte(s) en attente d'envoi.</p>
           </div>
-          <button type="button" onClick={synchroniserTout} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded">
-            🔄 Synchroniser maintenant
+          <button type="button" onClick={synchroniserTout} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            Synchroniser
           </button>
         </div>
       )}
 
       <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-        <h3 className="text-lg font-bold text-green-800 mb-4">📍 Localisation</h3>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-shrink-0 bg-green-200 text-green-700 rounded-full h-8 w-8 flex items-center justify-center font-bold">1</div>
+          <h3 className="text-lg font-bold text-green-800">Localisation</h3>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* PAYS */}
@@ -332,12 +344,16 @@ export default function Formulaire({ user, profile }) {
             <label className="block text-sm font-medium text-gray-700">
               Pays
               {listePays.length === 0 && (
-                <button type="button" onClick={chargerDonneesReferentiel} className="ml-2 text-xs text-green-600 underline hover:text-green-800">
-                  🔄 Recharger la liste
+                <button type="button" onClick={chargerDonneesReferentiel} className="ml-2 text-xs text-green-600 underline hover:text-green-800 inline-flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4l16 16" />
+                  </svg>
+                  Recharger
                 </button>
               )}
             </label>
-            <select required value={paysId} onChange={(e) => chargerRegions(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border" disabled={profile?.role !== 'gestionnaire' && profile?.role !== 'gerant'}>
+            <select required value={paysId} onChange={(e) => chargerRegions(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border" disabled={pageContext?.paysId || (profile?.role !== 'gestionnaire' && profile?.role !== 'gerant')}>
               <option value="">-- Choisir un pays --</option>
               {listePays.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
@@ -346,7 +362,7 @@ export default function Formulaire({ user, profile }) {
           {/* RÉGION */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Région</label>
-            <select required disabled={!paysId || (profile?.role === 'manager' || profile?.role === 'benevole')} value={regionId} onChange={(e) => chargerCommunes(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
+            <select required disabled={!paysId || pageContext?.regionId || (profile?.role === 'manager' || profile?.role === 'benevole')} value={regionId} onChange={(e) => chargerCommunes(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
               <option value="">-- Choisir une région --</option>
               {listeRegions.map(r => <option key={r.id} value={r.id}>{r.nom}</option>)}
             </select>
@@ -355,7 +371,7 @@ export default function Formulaire({ user, profile }) {
           {/* COMMUNE */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Commune</label>
-            <select required disabled={!regionId || profile?.role === 'benevole'} value={communeId} onChange={(e) => chargerVillages(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
+            <select required disabled={!regionId || pageContext?.communeId || profile?.role === 'benevole'} value={communeId} onChange={(e) => chargerVillages(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
               <option value="">-- Choisir une commune --</option>
               {listeCommunes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>
@@ -364,7 +380,7 @@ export default function Formulaire({ user, profile }) {
           {/* VILLAGE */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Village</label>
-            <select required disabled={!communeId} value={villageId} onChange={(e) => setVillageId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
+            <select required disabled={!communeId || pageContext?.villageId} value={villageId} onChange={(e) => setVillageId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
               <option value="">-- Choisir un village --</option>
               {listeVillages.map(v => <option key={v.id} value={v.id}>{v.nom}</option>)}
             </select>
@@ -375,7 +391,10 @@ export default function Formulaire({ user, profile }) {
       {/* MODULE RÉCOLTE (S'affiche uniquement si un village est choisi) */}
       {villageId && (
         <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100 animate-fade-in-up">
-          <h3 className="text-lg font-bold text-yellow-800 mb-4">🌾 Données de la récolte</h3>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-shrink-0 bg-yellow-200 text-yellow-700 rounded-full h-8 w-8 flex items-center justify-center font-bold">2</div>
+            <h3 className="text-lg font-bold text-yellow-800">Données de la récolte</h3>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             
             {/* VARIÉTÉ */}

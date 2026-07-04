@@ -3,8 +3,9 @@ import { supabase } from './supabaseClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
 import ZoneBadge from './ZoneBadge';
+import Formulaire from './Formulaire';
 
-export default function RegionPage({ profile }) {
+export default function RegionPage({ profile, user }) {
   const { id: regionId } = useParams();
   const navigate = useNavigate();
 
@@ -110,8 +111,11 @@ export default function RegionPage({ profile }) {
             Région : <span className="text-green-700">{region?.nom || '...'}</span>
           </h1>
         </div>
-        <button onClick={() => navigate('/gestionnaire')} className="text-sm text-green-600 hover:text-green-800 underline">
-          &larr; Retour au tableau de bord
+        <button onClick={() => navigate('/gestionnaire')} className="inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Retour au tableau de bord
         </button>
       </div>
 
@@ -200,6 +204,18 @@ export default function RegionPage({ profile }) {
           </table>
         </div>
       </div>
+
+      {/* Section Saisie de récolte (conditionnelle) */}
+      {isInZone && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Saisir une nouvelle récolte dans cette région</h2>
+          <Formulaire 
+            user={user} 
+            profile={profile} 
+            pageContext={{ regionId: parseInt(regionId, 10) }} 
+          />
+        </div>
+      )}
     </div>
   );
 }

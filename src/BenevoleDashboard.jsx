@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Formulaire from './Formulaire';
 import { supabase } from './supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 export default function BenevoleDashboard({ profile, user }) {
   const [villages, setVillages] = useState([]);
   const [loadingVillages, setLoadingVillages] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchVillages = async () => {
@@ -27,6 +29,10 @@ export default function BenevoleDashboard({ profile, user }) {
 
     fetchVillages();
   }, [profile?.commune?.id]);
+
+  const handleVillageClick = (villageId) => {
+    navigate(`/village/${villageId}`);
+  };
 
   // On s'assure que le profil est bien chargé pour éviter les erreurs
   if (!profile) {
@@ -60,9 +66,9 @@ export default function BenevoleDashboard({ profile, user }) {
         ) : villages.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {villages.map((village) => (
-              <div key={village.id} className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-center">
+              <button key={village.id} onClick={() => handleVillageClick(village.id)} className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-center hover:bg-green-100 hover:border-green-300 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500">
                 <span className="font-medium">{village.nom}</span>
-              </div>
+              </button>
             ))}
           </div>
         ) : (

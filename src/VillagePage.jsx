@@ -4,11 +4,12 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import { useParams, useNavigate } from 'react-router-dom';
 import ZoneBadge from './ZoneBadge';
 import Carte from './Carte';
+import Formulaire from './Formulaire';
 import { parsePostGISCoordinates } from './utils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-export default function VillagePage({ profile }) {
+export default function VillagePage({ profile, user }) {
   const { id: villageId } = useParams();
   const navigate = useNavigate();
 
@@ -110,8 +111,11 @@ export default function VillagePage({ profile }) {
             </h1>
           </div>
         </div>
-        <button onClick={() => navigate(`/commune/${village?.commune_id}`)} className="text-sm text-green-600 hover:text-green-800 underline">
-          &larr; Retour à la commune
+        <button onClick={() => navigate(`/commune/${village?.commune_id}`)} className="inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Retour à la commune
         </button>
       </div>
 
@@ -184,6 +188,18 @@ export default function VillagePage({ profile }) {
           </table>
         </div>
       </div>
+
+      {/* Section Saisie de récolte (conditionnelle) */}
+      {isInZone && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Saisir une nouvelle récolte dans ce village</h2>
+          <Formulaire 
+            user={user} 
+            profile={profile} 
+            pageContext={{ regionId: village?.commune?.region_id, communeId: village?.commune_id, villageId: parseInt(villageId, 10) }} 
+          />
+        </div>
+      )}
     </div>
   );
 }

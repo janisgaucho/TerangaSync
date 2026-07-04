@@ -4,9 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { useParams, useNavigate } from 'react-router-dom';
 import ZoneBadge from './ZoneBadge';
 import Carte from './Carte';
+import Formulaire from './Formulaire';
 import { parsePostGISCoordinates } from './utils';
 
-export default function CommunePage({ profile }) {
+export default function CommunePage({ profile, user }) {
   const { id: communeId } = useParams();
   const navigate = useNavigate();
 
@@ -124,8 +125,11 @@ export default function CommunePage({ profile }) {
             </h1>
           </div>
         </div>
-        <button onClick={() => commune?.region_id && navigate(`/region/${commune.region_id}`)} className="text-sm text-green-600 hover:text-green-800 underline disabled:text-gray-400" disabled={!commune?.region_id}>
-          &larr; Retour à la région
+        <button onClick={() => commune?.region_id && navigate(`/region/${commune.region_id}`)} className="inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors disabled:text-gray-400 disabled:hover:bg-transparent" disabled={!commune?.region_id}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Retour à la région
         </button>
       </div>
 
@@ -209,6 +213,18 @@ export default function CommunePage({ profile }) {
           </table>
         </div>
       </div>
+
+      {/* Section Saisie de récolte (conditionnelle) */}
+      {isInZone && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Saisir une nouvelle récolte dans cette commune</h2>
+          <Formulaire 
+            user={user} 
+            profile={profile} 
+            pageContext={{ regionId: commune?.region_id, communeId: parseInt(communeId, 10) }} 
+          />
+        </div>
+      )}
     </div>
   );
 }
