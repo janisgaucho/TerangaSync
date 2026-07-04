@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Formulaire from './Formulaire'
 import Dashboard from './Dashboard'
 import BenevoleDashboard from './BenevoleDashboard'
 import GestionnaireDashboard from './GestionnaireDashboard'
 import RegionPage from './RegionPage'
+import CommunePage from './CommunePage' // Ajout de l'import
+import VillagePage from './VillagePage'
+import SaisieRecoltePage from './SaisieRecoltePage'
+import HistoriquePersonnelPage from './HistoriquePersonnelPage'
+import MainLayout from './MainLayout'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -13,8 +19,8 @@ function App() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [erreur, setErreur] = useState(null)
-  const [selectedRegionId, setSelectedRegionId] = useState(null)
-  const [view, setView] = useState('dashboard') // 'dashboard' | 'formulaire' | 'login'
+  
+  const navigate = useNavigate();
 
   // Cet effet s'exécute au chargement et à chaque changement d'état d'authentification
   useEffect(() => {
@@ -48,8 +54,7 @@ function App() {
         setProfile(null)
         setEmail('')
         setPassword('')
-        setSelectedRegionId(null)
-        setView('dashboard') // Retour à la vue publique par défaut
+        navigate('/'); // Redirige vers la page publique après déconnexion
       }
     })
 
@@ -67,7 +72,10 @@ function App() {
       password: password,
     })
 
-    if (error) setErreur("Email ou mot de passe incorrect.")
+    if (error) {
+      setErreur("Email ou mot de passe incorrect.")
+    }
+    // La redirection se fera automatiquement via le changement de session
     setLoading(false)
   }
 
@@ -79,14 +87,9 @@ function App() {
     setLoading(false)
   }
 
-  // SI L'UTILISATEUR N'EST PAS CONNECTÉ
-  if (!session) {
-    // Si on est en mode "dashboard", on affiche le tableau de bord public
-    if (view === 'dashboard') {
-      return <Dashboard onLoginClick={() => setView('login')} />
-    }
-
-    return (
+  // --- Composant pour la page de Login ---
+  const LoginPage = () => {
+    return(
       <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
@@ -130,7 +133,7 @@ function App() {
             <div className="text-center mt-4">
               <button 
                 type="button"
-                onClick={() => setView('dashboard')}
+                onClick={() => navigate('/')}
                 className="text-sm text-green-600 hover:text-green-800 underline"
               >
                 &larr; Retour au tableau de bord public
@@ -140,134 +143,54 @@ function App() {
         </div>
       </div>
     )
-  }
+  };
 
-  // --- GESTION DES ACCÈS (RBAC) ---
-  // Si le profil est en cours de chargement, on affiche un loader pour éviter les flashs de contenu
+  // --- Composant pour la redirection basée sur le rôle ---
+  const RoleBasedRedirect = () => {
+    if (!profile) return null; // Attendre que le profil soit chargé
+
+    switch (profile.role) {
+      case 'benevole':
+        return <Navigate to="/benevole" replace />;
+      case 'gestionnaire':
+        return <Navigate to="/gestionnaire" replace />;
+      case 'manager':
+      case 'gerant':
+        return <Navigate to="/manager" replace />;
+      default:
+        return <Navigate to="/" replace />; // Page par défaut si rôle inconnu
+    }
+  };
+
+  // --- Affichage principal ---
   if (!profile) {
     return <div className="text-center p-10 text-gray-500">Chargement du profil utilisateur...</div>
   }
 
-  // Définition des permissions
-  const canViewDashboard = ['manager', 'gestionnaire', 'gerant'].includes(profile.role);
-  const canAccessForm = ['benevole', 'manager', 'gestionnaire', 'gerant'].includes(profile.role);
-
-  // --- VUE SPÉCIFIQUE BÉNÉVOLE / GESTIONNAIRE ---
-  if (profile.role === 'benevole') {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <span className="text-xl font-bold text-green-800">TerangaSync</span>
-              <div className="flex items-center gap-4">
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold uppercase">
-                  {profile.role}
-                </span>
-                <button onClick={handleLogout} disabled={loading} className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50">
-                  Déconnexion
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <main>
-          <BenevoleDashboard profile={profile} user={session.user} />
-        </main>
-      </div>
-    );
-  }
-
-  if (profile.role === 'gestionnaire') {
-    // Si une région est sélectionnée, on affiche la page de détail
-    if (selectedRegionId) {
-      return <RegionPage regionId={selectedRegionId} onBackClick={() => setSelectedRegionId(null)} />;
-    }
-
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <span className="text-xl font-bold text-green-800">TerangaSync</span>
-              <div className="flex items-center gap-4">
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold uppercase">
-                  {profile.role}
-                </span>
-                <button onClick={handleLogout} disabled={loading} className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50">
-                  Déconnexion
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <main>
-          <GestionnaireDashboard 
-            profile={profile} 
-            user={session.user} 
-            onRegionClick={(id) => setSelectedRegionId(id)} />
-        </main>
-      </div>
-    );
-  }
-
-  // SI L'UTILISATEUR EST CONNECTÉ : On affiche le tableau de bord (qui sera notre formulaire de saisie)
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navigation Gérant */}
-      <nav className="bg-white shadow-sm mb-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <span className="text-xl font-bold text-green-800 mr-8">TerangaSync</span>
-              <div className="hidden sm:flex space-x-4">
-                {/* Le bouton "Vue d'ensemble" n'est visible que pour les rôles autorisés */}
-                {canViewDashboard && (
-                  <button
-                    onClick={() => setView('dashboard')}
-                    className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'dashboard' ? 'bg-green-100 text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Vue d'ensemble
-                  </button>
-                )}
-                {/* Le bouton "Saisie" est visible pour tous les rôles connectés */}
-                {canAccessForm && (
-                  <button
-                    onClick={() => setView('formulaire')}
-                    className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'formulaire' ? 'bg-green-100 text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Saisie Récolte
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Affiche le rôle de l'utilisateur s'il est chargé */}
-              {profile && (
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold uppercase">
-                  {profile.role}
-                </span>
-              )}
-              <button onClick={handleLogout} disabled={loading} className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50">
-                Déconnexion
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <Routes>
+      {/* Routes Publiques */}
+      <Route path="/" element={<Dashboard onLoginClick={() => navigate('/login')} />} />
+      <Route path="/login" element={!session ? <LoginPage /> : <RoleBasedRedirect />} />
 
-      {/* Contenu Principal */}
-      {/* On vérifie le droit d'accès avant d'afficher la vue */}
-      {view === 'dashboard' && canViewDashboard && (
-        <Dashboard isPublic={false} userRole={profile.role} />
+      {/* Routes Protégées */}
+      {session && (
+        <Route element={<MainLayout profile={profile} loading={loading} onLogout={handleLogout} />}>
+          <Route path="/benevole" element={profile.role === 'benevole' ? <BenevoleDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />          
+          <Route path="/gestionnaire" element={['gestionnaire', 'gerant'].includes(profile.role) ? <GestionnaireDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
+          <Route path="/region/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <RegionPage /> : <Navigate to="/" />} />
+          <Route path="/commune/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <CommunePage /> : <Navigate to="/" />} />
+          <Route path="/village/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <VillagePage /> : <Navigate to="/" />} />
+          <Route path="/saisir-recolte" element={<SaisieRecoltePage user={session.user} />} />
+          <Route path="/historique-personnel" element={<HistoriquePersonnelPage user={session.user} />} />
+          {/* Ajoutez ici les routes pour manager, gerant, etc. */}
+          <Route path="/manager" element={<Dashboard isPublic={false} userRole={profile.role} />} />
+        </Route>
       )}
-      {view === 'formulaire' && canAccessForm && (
-        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-md p-6 mx-4 sm:mx-auto">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Formulaire de Récolte</h2>
-          <Formulaire user={session.user} />      
-        </div>
-      )}
-    </div>
+
+      {/* Redirection pour les utilisateurs connectés arrivant sur la racine */}
+      {session && <Route path="/" element={<RoleBasedRedirect />} />}
+    </Routes>
   )
 }
 

@@ -3,40 +3,37 @@ import { supabase } from './supabaseClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
 
-export default function RegionPage() {
-  const { id: regionId } = useParams();
+export default function CommunePage() {
+  const { id: communeId } = useParams();
   const navigate = useNavigate();
 
-  const [region, setRegion] = useState(null);
-  const [communes, setCommunes] = useState([]);
+  const [commune, setCommune] = useState(null);
+  const [villages, setVillages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [historiqueRecoltes, setHistoriqueRecoltes] = useState([]);
-  const [sortBy, setSortBy] = useState('nom'); // 'nom' ou 'recolte'
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!regionId) return;
+      if (!communeId) return;
 
       setLoading(true);
+      setError(null);
 
       try {
-        // On utilise des requêtes séparées et fiables
-        const [regionRes, communesRes, recoltesRes] = await Promise.all([
-          supabase.from('region').select('nom').eq('id', regionId).single(),
-          supabase.from('commune').select('id, nom').eq('region_id', regionId),
-          supabase.from('recoltes_details').select('*').eq('region_id', regionId)
+        const [communeRes, villagesRes, recoltesRes] = await Promise.all([
+          supabase.from('commune').select('nom, region_id').eq('id', communeId).single(),
+          supabase.from('village').select('id, nom').eq('commune_id', communeId),
+          supabase.from('recoltes_details').select('*').eq('commune_id', communeId)
         ]);
 
-        // Gestion des erreurs
-        if (regionRes.error) throw regionRes.error;
-        if (communesRes.error) throw communesRes.error;
+        if (communeRes.error) throw communeRes.error;
+        if (villagesRes.error) throw villagesRes.error;
         if (recoltesRes.error) throw recoltesRes.error;
 
-        // Mise à jour des états
-        setRegion(regionRes.data);
+        setCommune(communeRes.data);
+        const villagesData = villagesRes.data || [];
         const recoltesData = recoltesRes.data || [];
-        const communesData = communesRes.data || [];
 
         // Préparer l'historique
         setHistoriqueRecoltes(recoltesData.map(r => ({
@@ -45,47 +42,42 @@ export default function RegionPage() {
           profiles: { prenom: r.user_prenom }
         })));
 
-        // Agréger les données de récolte par commune
-        const statsParCommune = new Map();
+        // Agréger les données de récolte par village
+        const statsParVillage = new Map();
         recoltesData.forEach(recolte => {
-          const totalActuel = statsParCommune.get(recolte.commune_id) || 0;
-          statsParCommune.set(recolte.commune_id, totalActuel + (recolte.quantite_kg || 0));
+          const totalActuel = statsParVillage.get(recolte.village_id) || 0;
+          statsParVillage.set(recolte.village_id, totalActuel + (recolte.quantite_kg || 0));
         });
 
-        // Fusionner la liste des communes avec leurs statistiques
-        const communesAvecStats = communesData.map(commune => ({
-          ...commune,
-          totalRecolte: statsParCommune.get(commune.id) || 0
+        // Fusionner la liste des villages avec leurs statistiques
+        const villagesAvecStats = villagesData.map(village => ({
+          ...village,
+          totalRecolte: statsParVillage.get(village.id) || 0
         }));
 
-        setCommunes(communesAvecStats);
+        setVillages(villagesAvecStats);
 
       } catch (err) {
-        console.error("Erreur lors du chargement des données de la région:", err);
-        setError("Impossible de charger les données pour cette région.");
+        console.error("Erreur lors du chargement des données de la commune:", err);
+        setError("Impossible de charger les données pour cette commune.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [regionId]);
+  }, [communeId]);
 
-  // Tri des communes en fonction de l'état sortBy
-  const sortedCommunes = useMemo(() => {
-    const sorted = [...communes];
-    if (sortBy === 'nom') sorted.sort((a, b) => a.nom.localeCompare(b.nom));
-    if (sortBy === 'recolte') sorted.sort((a, b) => b.totalRecolte - a.totalRecolte);
-    return sorted;
-  }, [communes, sortBy]);
+  const sortedVillages = useMemo(() => {
+    return [...villages].sort((a, b) => a.nom.localeCompare(b.nom));
+  }, [villages]);
 
-  // Calcul du total des récoltes pour la région
-  const totalRecolteRegion = useMemo(() => {
-    return communes.reduce((total, c) => total + c.totalRecolte, 0);
-  }, [communes]);
+  const totalRecolteCommune = useMemo(() => {
+    return villages.reduce((total, v) => total + v.totalRecolte, 0);
+  }, [villages]);
 
   if (loading) {
-    return <div className="text-center p-10">Chargement de la région...</div>;
+    return <div className="text-center p-10">Chargement de la commune...</div>;
   }
 
   if (error) {
@@ -97,53 +89,50 @@ export default function RegionPage() {
       {/* Section Titre et retour */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">
-          Région : <span className="text-green-700">{region?.nom || '...'}</span>
+          Commune : <span className="text-green-700">{commune?.nom || '...'}</span>
         </h1>
-        <button onClick={() => navigate('/gestionnaire')} className="text-sm text-green-600 hover:text-green-800 underline">
-          &larr; Retour au tableau de bord
+        <button onClick={() => navigate(`/region/${commune?.region_id}`)} className="text-sm text-green-600 hover:text-green-800 underline">
+          &larr; Retour à la région
         </button>
       </div>
 
-      {/* Section Communes */}
+      {/* Section Villages */}
       <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Liste des communes</h2>
-        </div>
-
-        {sortedCommunes.length > 0 ? (
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Liste des villages</h2>
+        {sortedVillages.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {sortedCommunes.map((commune) => (
+            {sortedVillages.map((village) => (
               <button
-                key={commune.id}
-                onClick={() => navigate(`/commune/${commune.id}`)}
-                className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-center hover:bg-blue-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                key={village.id}
+                onClick={() => navigate(`/village/${village.id}`)}
+                className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 text-center hover:bg-yellow-100 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500"
               >
-                <span className="font-medium">{commune.nom}</span>
+                <span className="font-medium">{village.nom}</span>
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Aucune commune enregistrée pour cette région.</p>
+          <p className="text-sm text-gray-500">Aucun village enregistré pour cette commune.</p>
         )}
       </div>
 
       {/* Section Statistiques */}
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Statistiques de la région</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Statistiques de la commune</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <dt className="text-sm font-medium text-green-800 truncate">Total Récolté (Région)</dt>
-            <dd className="mt-1 text-3xl font-semibold text-green-900">{(totalRecolteRegion / 1000).toFixed(2)} Tonnes</dd>
+            <dt className="text-sm font-medium text-green-800 truncate">Total Récolté (Commune)</dt>
+            <dd className="mt-1 text-3xl font-semibold text-green-900">{(totalRecolteCommune / 1000).toFixed(2)} Tonnes</dd>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <dt className="text-sm font-medium text-blue-800 truncate">Nombre de communes</dt>
-            <dd className="mt-1 text-3xl font-semibold text-blue-900">{communes.length}</dd>
+            <dt className="text-sm font-medium text-blue-800 truncate">Nombre de villages</dt>
+            <dd className="mt-1 text-3xl font-semibold text-blue-900">{villages.length}</dd>
           </div>
         </div>
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Production par commune (en Kg)</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Production par village (en Kg)</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <BarChart data={sortedCommunes} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+            <BarChart data={sortedVillages.sort((a, b) => b.totalRecolte - a.totalRecolte)} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="nom" />
               <YAxis />
@@ -163,7 +152,6 @@ export default function RegionPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commune</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Village</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variété</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantité (kg)</th>
@@ -175,15 +163,14 @@ export default function RegionPage() {
                 historiqueRecoltes.sort((a, b) => new Date(b.date_saisie) - new Date(a.date_saisie)).map((recolte, index) => (
                   <tr key={index}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(recolte.date_saisie).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.communeNom}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.villageNom}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.variete?.nom || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg ? recolte.quantite_kg.toLocaleString() : '0'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.profiles?.prenom || 'Utilisateur inconnu'}</td>
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="6" className="text-center py-4 text-sm text-gray-500">Aucune récolte enregistrée pour cette région.</td></tr>
+                <tr><td colSpan="5" className="text-center py-4 text-sm text-gray-500">Aucune récolte enregistrée pour cette commune.</td></tr>
               )}
             </tbody>
           </table>
