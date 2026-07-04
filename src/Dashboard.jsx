@@ -61,7 +61,7 @@ export default function Dashboard({ onLoginClick, isPublic = true, userRole }) {
         quantite_kg,
         variete ( nom ),
         parcelle ( 
-          village ( nom, coordonnees ) 
+          village ( nom, latitude, longitude ) 
         )
       `)
 
@@ -124,16 +124,9 @@ export default function Dashboard({ onLoginClick, isPublic = true, userRole }) {
     data.forEach(item => {
       const v = item.parcelle?.village
       
-      let coords = null;
-      if (v && v.coordonnees) {
-        // Cas 1 : Format Hexadécimal (WKB) de PostGIS (le cas actuel)
-        if (typeof v.coordonnees === 'string') {
-          coords = parsePostGISCoordinates(v.coordonnees);
-        } 
-        // Cas 2 : Format GeoJSON (si configuré autrement dans le futur)
-        else if (v.coordonnees.coordinates) {
-          coords = { lat: v.coordonnees.coordinates[1], lng: v.coordonnees.coordinates[0] };
-        }
+      let coords = null
+      if (v && v.latitude && v.longitude) {
+        coords = { lat: v.latitude, lng: v.longitude }
       }
 
       if (coords) {

@@ -29,16 +29,32 @@ function App() {
     const fetchProfile = async (user) => {
       if (user) {
         const { data, error } = await supabase
-          .from('profiles') // On suppose une table 'profiles' avec une colonne 'role'
-          .select('role, prenom, commune:commune_id (id, nom), region:region_id (id, nom)')
+          .from('profiles')
+          .select('role, prenom, commune_id, region_id')
           .eq('id', user.id)
           .single()
         
         if (error) {
           console.error("Erreur lors de la récupération du profil:", error)
-          setProfile(null)
+          setProfile(null); // En cas d'erreur, on s'assure que le profil est nul
+          return; // On arrête l'exécution ici
         } else if (data) {
-          setProfile(data)
+          // Pour la simplicité et la robustesse, on récupère les noms des zones d'affectation séparément
+          let profileData = { ...data };
+          try {
+            if (data.commune_id) {
+              const { data: communeData } = await supabase.from('commune').select('id, nom').eq('id', data.commune_id).single();
+              profileData.commune = communeData;
+            }
+            if (data.region_id) {
+              const { data: regionData } = await supabase.from('region').select('id, nom').eq('id', data.region_id).single();
+              profileData.region = regionData;
+            }
+            setProfile(profileData);
+          } catch (e) {
+            console.error("Erreur lors de la récupération des détails du profil:", e);
+            setProfile(data); // On met au moins le profil de base
+          }
         }
       } else {
         setProfile(null) // Pas d'utilisateur, pas de profil
@@ -153,7 +169,7 @@ function App() {
 
   // --- Composant pour la redirection basée sur le rôle ---
   const RoleBasedRedirect = () => {
-    if (!profile) return null; // Attendre que le profil soit chargé
+    if (!profile) return <Navigate to="/" replace />; // Si le profil n'existe pas, retour à l'accueil
 
     switch (profile.role) {
       case 'benevole':
@@ -180,7 +196,7 @@ function App() {
       <Route path="/login" element={!session ? <LoginPage /> : <RoleBasedRedirect />} />
 
       {/* Routes Protégées */}
-      {session && (
+      {session && profile && (
         <Route element={<MainLayout profile={profile} loading={loading} onLogout={handleLogout} />}>
           <Route path="/benevole" element={profile.role === 'benevole' ? <BenevoleDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />          
           <Route path="/gestionnaire" element={['gestionnaire', 'gerant'].includes(profile.role) ? <GestionnaireDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
