@@ -1,6 +1,6 @@
 // d:\TERANGASYNC\terangasync-app\src\Carte.jsx
-import React from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import React, { useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
@@ -29,37 +29,60 @@ const createBlinkingIcon = () => {
   })
 }
 
-export default function Carte({ villages, onVillageSelect }) {
+// NOUVEAU: Composant pour ajuster automatiquement la vue de la carte
+function FitBounds({ villages }) {
+  const map = useMap();
+  useEffect(() => {
+    if (villages && villages.length > 1) {
+      const bounds = L.latLngBounds(villages.map(v => [v.lat, v.lng]));
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [villages, map]);
+  return null;
+}
+
+export default function Carte({ villages, onVillageSelect, zoom = 7 }) {
   // Centre par défaut sur le Sénégal
-  const defaultCenter = [14.4974, -14.4524];
+  const mapCenter = villages.length === 1 ? [villages[0].lat, villages[0].lng] : [14.4974, -14.4524];
 
   return (
-    <div className="h-96 w-full rounded-lg overflow-hidden border border-gray-200">
-      <MapContainer center={defaultCenter} zoom={7} style={{ height: '100%', width: '100%' }}>
+    <div className="h-full w-full">
+      <MapContainer center={mapCenter} zoom={zoom} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
         {/* Le MarkerClusterGroup gère automatiquement le regroupement des points proches */}
-        <MarkerClusterGroup chunkedLoading>
-          {villages.map((village, idx) => (
-            <Marker 
-              key={idx} 
-              position={[village.lat, village.lng]}
-              icon={createBlinkingIcon()}
-              eventHandlers={{
-                click: () => onVillageSelect(village.nom),
-              }}
-            >
-              <Popup>
-                <div className="text-center">
-                  <strong className="text-green-700 text-lg">{village.nom}</strong><br />
-                  Production : <span className="font-bold">{village.kilos} kg</span>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+        <FitBounds villages={villages} />
+        <MarkerClusterGroup
+          chunkedLoading
+          // Force le dégroupement des clusters pour une meilleure visibilité
+          zoomToBoundsOnClick={true}
+        >
+          {villages.map((village, idx) => {
+            const markerProps = {
+              key: idx,
+              position: [village.lat, village.lng],
+              icon: createBlinkingIcon(),
+            };
+
+            if (onVillageSelect) {
+              markerProps.eventHandlers = { click: () => onVillageSelect(village.nom) };
+            }
+
+            return (
+            <Marker {...markerProps}>
+              {onVillageSelect && (
+                <Popup>
+                  <div className="text-center">
+                    <strong className="text-green-700 text-lg">{village.nom}</strong><br />
+                    {village.kilos !== undefined && `Production : ${village.kilos} kg`}
+                  </div>
+                </Popup>
+              )}
+            </Marker>);
+          })}
         </MarkerClusterGroup>
       </MapContainer>
     </div>

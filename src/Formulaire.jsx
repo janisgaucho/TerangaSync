@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './supabaseClient'
-import { useMemo } from 'react'
 
-export default function Formulaire({ user }) {
+export default function Formulaire({ user, profile }) {
   // --- ÉTATS POUR LES LISTES DÉROULANTES ---
   const [listePays, setListePays] = useState([])
   const [listeRegions, setListeRegions] = useState([])
@@ -46,6 +45,40 @@ export default function Formulaire({ user }) {
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
   }, [])
+
+  // NOUVEAU : Effet pour pré-remplir le formulaire en fonction du profil
+  useEffect(() => {
+    if (profile) {
+      const paysSénégal = 1; // On assume que le Sénégal a l'ID 1
+      setPaysId(paysSénégal);
+
+      if (profile.role === 'manager' && profile.region?.id) {
+        setRegionId(profile.region.id);
+      }
+      
+      if (profile.role === 'benevole' && profile.commune?.id) {
+        // Pour le bénévole, il faut trouver la région de sa commune
+        const communeInfo = JSON.parse(localStorage.getItem('ref_communes') || '[]').find(c => c.id === profile.commune.id);
+        if (communeInfo) {
+          setRegionId(communeInfo.region_id);
+          setCommuneId(profile.commune.id);
+        }
+      }
+    }
+  }, [profile]);
+
+  // Mise à jour des listes en cascade lorsque les IDs sont pré-remplis
+  useEffect(() => {
+    if (paysId && allRegions.length > 0) {
+      chargerRegions(paysId);
+    }
+    if (regionId && allCommunes.length > 0) {
+      chargerCommunes(regionId);
+    }
+    if (communeId && allVillages.length > 0) {
+      chargerVillages(communeId);
+    }
+  }, [paysId, regionId, communeId, allRegions, allCommunes, allVillages]);
 
   // Charge tout le référentiel (Pays, Régions, Communes, Villages, Variétés)
   // et le met en cache pour le mode hors-ligne
@@ -106,8 +139,12 @@ export default function Formulaire({ user }) {
 
   // Fonctions de chargement en cascade (optimisées)
   function chargerRegions(id_pays) {
-    setPaysId(id_pays); setRegionId(''); setCommuneId(''); setVillageId('');
-    setListeRegions([]); setListeCommunes([]); setListeVillages([]);
+    setPaysId(id_pays);
+    // On ne réinitialise que si l'utilisateur change manuellement le pays
+    if (id_pays !== paysId) {
+      setRegionId(''); setCommuneId(''); setVillageId('');
+      setListeCommunes([]); setListeVillages([]);
+    }
     
     if (!id_pays) return;
     
@@ -118,8 +155,11 @@ export default function Formulaire({ user }) {
   }
 
   function chargerCommunes(id_region) {
-    setRegionId(id_region); setCommuneId(''); setVillageId('');
-    setListeCommunes([]); setListeVillages([]);
+    setRegionId(id_region);
+    if (id_region !== regionId) {
+      setCommuneId(''); setVillageId('');
+      setListeVillages([]);
+    }
     
     if (!id_region) return;
 
@@ -130,8 +170,10 @@ export default function Formulaire({ user }) {
   }
 
   function chargerVillages(id_commune) {
-    setCommuneId(id_commune); setVillageId('');
-    setListeVillages([]);
+    setCommuneId(id_commune);
+    if (id_commune !== communeId) {
+      setVillageId('');
+    }
     
     if (!id_commune) return;
 
@@ -295,7 +337,7 @@ export default function Formulaire({ user }) {
                 </button>
               )}
             </label>
-            <select required value={paysId} onChange={(e) => chargerRegions(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border">
+            <select required value={paysId} onChange={(e) => chargerRegions(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border" disabled={profile?.role !== 'gestionnaire' && profile?.role !== 'gerant'}>
               <option value="">-- Choisir un pays --</option>
               {listePays.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
@@ -304,7 +346,7 @@ export default function Formulaire({ user }) {
           {/* RÉGION */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Région</label>
-            <select required disabled={!paysId} value={regionId} onChange={(e) => chargerCommunes(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
+            <select required disabled={!paysId || (profile?.role === 'manager' || profile?.role === 'benevole')} value={regionId} onChange={(e) => chargerCommunes(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
               <option value="">-- Choisir une région --</option>
               {listeRegions.map(r => <option key={r.id} value={r.id}>{r.nom}</option>)}
             </select>
@@ -313,7 +355,7 @@ export default function Formulaire({ user }) {
           {/* COMMUNE */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Commune</label>
-            <select required disabled={!regionId} value={communeId} onChange={(e) => chargerVillages(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
+            <select required disabled={!regionId || profile?.role === 'benevole'} value={communeId} onChange={(e) => chargerVillages(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border disabled:bg-gray-100">
               <option value="">-- Choisir une commune --</option>
               {listeCommunes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>

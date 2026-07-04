@@ -2,14 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
+import ZoneBadge from './ZoneBadge';
+import Carte from './Carte';
+import { parsePostGISCoordinates } from './utils';
 
-export default function CommunePage() {
+export default function CommunePage({ profile }) {
   const { id: communeId } = useParams();
   const navigate = useNavigate();
 
   const [commune, setCommune] = useState(null);
   const [villages, setVillages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mapMarkers, setMapMarkers] = useState([]);
   const [historiqueRecoltes, setHistoriqueRecoltes] = useState([]);
   const [error, setError] = useState(null);
 
@@ -23,7 +27,7 @@ export default function CommunePage() {
       try {
         const [communeRes, villagesRes, recoltesRes] = await Promise.all([
           supabase.from('commune').select('nom, region_id').eq('id', communeId).single(),
-          supabase.from('village').select('id, nom').eq('commune_id', communeId),
+          supabase.from('village').select('id, nom, latitude, longitude').eq('commune_id', communeId),
           supabase.from('recoltes_details').select('*').eq('commune_id', communeId)
         ]);
 
@@ -33,6 +37,16 @@ export default function CommunePage() {
 
         setCommune(communeRes.data);
         const villagesData = villagesRes.data || [];
+        
+        // Utiliser les colonnes latitude et longitude
+        const markers = villagesData.map(village => {
+          if (village.latitude && village.longitude) {
+            return { nom: village.nom, lat: village.latitude, lng: village.longitude };
+          }
+          return null;
+        }).filter(Boolean);
+        setMapMarkers(markers);
+
         const recoltesData = recoltesRes.data || [];
 
         // Préparer l'historique
@@ -73,8 +87,17 @@ export default function CommunePage() {
   }, [villages]);
 
   const totalRecolteCommune = useMemo(() => {
-    return villages.reduce((total, v) => total + v.totalRecolte, 0);
+    return villages.reduce((total, v) => total + (v.totalRecolte || 0), 0);
   }, [villages]);
+
+  const isInZone = useMemo(() => {
+    if (!profile || !commune) return false;
+    const currentCommuneId = parseInt(communeId, 10);
+    if (['gestionnaire', 'gerant'].includes(profile.role)) return true;
+    if (profile.role === 'manager' && profile.region?.id === commune.region_id) return true;
+    if (profile.role === 'benevole' && profile.commune?.id === currentCommuneId) return true;
+    return false;
+  }, [profile, commune, communeId]);
 
   if (loading) {
     return <div className="text-center p-10">Chargement de la commune...</div>;
@@ -87,11 +110,21 @@ export default function CommunePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Section Titre et retour */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Commune : <span className="text-green-700">{commune?.nom || '...'}</span>
-        </h1>
-        <button onClick={() => navigate(`/region/${commune?.region_id}`)} className="text-sm text-green-600 hover:text-green-800 underline">
+      <div className="flex justify-between items-start">
+        <div className="flex items-start gap-6">
+          {mapMarkers.length > 0 && (
+            <div className="w-[32vh] h-[32vh] rounded-lg overflow-hidden shadow-md border-2 border-white">
+              <Carte villages={mapMarkers} zoom={11} />
+            </div>
+          )}
+          <div>
+            <ZoneBadge isInZone={isInZone} />
+            <h1 className="text-3xl font-bold text-gray-900 mt-1">
+              Commune : <span className="text-green-700">{commune?.nom || '...'}</span>
+            </h1>
+          </div>
+        </div>
+        <button onClick={() => commune?.region_id && navigate(`/region/${commune.region_id}`)} className="text-sm text-green-600 hover:text-green-800 underline disabled:text-gray-400" disabled={!commune?.region_id}>
           &larr; Retour à la région
         </button>
       </div>
@@ -162,8 +195,8 @@ export default function CommunePage() {
               {historiqueRecoltes.length > 0 ? (
                 historiqueRecoltes.sort((a, b) => new Date(b.date_saisie) - new Date(a.date_saisie)).map((recolte, index) => (
                   <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(recolte.date_saisie).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.villageNom}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.date_saisie ? new Date(recolte.date_saisie).toLocaleString() : 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.village_nom || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.variete?.nom || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg ? recolte.quantite_kg.toLocaleString() : '0'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.profiles?.prenom || 'Utilisateur inconnu'}</td>

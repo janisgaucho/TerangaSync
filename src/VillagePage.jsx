@@ -2,15 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
+import ZoneBadge from './ZoneBadge';
+import Carte from './Carte';
+import { parsePostGISCoordinates } from './utils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-export default function VillagePage() {
+export default function VillagePage({ profile }) {
   const { id: villageId } = useParams();
   const navigate = useNavigate();
 
   const [village, setVillage] = useState(null);
   const [recoltes, setRecoltes] = useState([]);
+  const [mapMarker, setMapMarker] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -23,15 +27,22 @@ export default function VillagePage() {
       try {
         // On utilise la même méthode robuste que pour les autres pages
         const [villageRes, recoltesDetailsRes] = await Promise.all([
-          supabase.from('village').select('nom, commune_id').eq('id', villageId).single(),
+          supabase.from('village').select('nom, commune_id, latitude, longitude, commune ( region_id )').eq('id', villageId).single(),
           supabase.from('recoltes_details').select('*').eq('village_id', villageId)
         ]);
 
         if (villageRes.error) throw villageRes.error;
         if (recoltesDetailsRes.error) throw recoltesDetailsRes.error;
 
-        setVillage(villageRes.data);
+        const villageData = villageRes.data;
+        setVillage(villageData);
         const recoltesData = recoltesDetailsRes.data || [];
+
+        // Utiliser les colonnes latitude et longitude
+        if (villageData?.latitude && villageData?.longitude) {
+          setMapMarker([{ nom: villageData.nom, lat: villageData.latitude, lng: villageData.longitude }]);
+        }
+
 
         // Préparer les données pour l'historique et les statistiques
         const processedRecoltes = recoltesData.map(r => ({
@@ -61,7 +72,7 @@ export default function VillagePage() {
     recoltes.forEach(item => {
       const varieteNom = item.variete?.nom || "Autre";
       if (!mapVariete[varieteNom]) mapVariete[varieteNom] = 0;
-      mapVariete[varieteNom] += item.quantite_kg;
+      mapVariete[varieteNom] += item.quantite_kg || 0;
     });
 
     const statsVariete = Object.keys(mapVariete).map(key => ({
@@ -72,15 +83,33 @@ export default function VillagePage() {
     return { totalRecolte, totalSurface, statsVariete };
   }, [recoltes]);
 
+  const isInZone = useMemo(() => {
+    if (!profile || !village) return false;
+    if (['gestionnaire', 'gerant'].includes(profile.role)) return true;
+    if (profile.role === 'manager' && profile.region?.id === village.commune?.region_id) return true;
+    if (profile.role === 'benevole' && profile.commune?.id === village.commune_id) return true;
+    return false;
+  }, [profile, village]);
+
   if (loading) return <div className="text-center p-10">Chargement du village...</div>;
   if (error) return <div className="text-center p-10 text-red-600">{error}</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Village : <span className="text-green-700">{village?.nom || '...'}</span>
-        </h1>
+      <div className="flex justify-between items-start">
+        <div className="flex items-start gap-6">
+          {mapMarker.length > 0 && (
+            <div className="w-[32vh] h-[32vh] rounded-lg overflow-hidden shadow-md border-2 border-white">
+              <Carte villages={mapMarker} zoom={15} />
+            </div>
+          )}
+          <div>
+            <ZoneBadge isInZone={isInZone} />
+            <h1 className="text-3xl font-bold text-gray-900 mt-1">
+              Village : <span className="text-green-700">{village?.nom || '...'}</span>
+            </h1>
+          </div>
+        </div>
         <button onClick={() => navigate(`/commune/${village?.commune_id}`)} className="text-sm text-green-600 hover:text-green-800 underline">
           &larr; Retour à la commune
         </button>
@@ -142,9 +171,9 @@ export default function VillagePage() {
               {recoltes.length > 0 ? (
                 recoltes.sort((a, b) => new Date(b.date_saisie) - new Date(a.date_saisie)).map((recolte, index) => (
                   <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(recolte.date_saisie).toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.date_saisie ? new Date(recolte.date_saisie).toLocaleString() : 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.variete?.nom || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg ? recolte.quantite_kg.toLocaleString() : '0'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.profiles?.prenom || 'Utilisateur inconnu'}</td>
                   </tr>
                 ))

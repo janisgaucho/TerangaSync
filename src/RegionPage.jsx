@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
+import ZoneBadge from './ZoneBadge';
 
-export default function RegionPage() {
+export default function RegionPage({ profile }) {
   const { id: regionId } = useParams();
   const navigate = useNavigate();
 
@@ -84,6 +85,13 @@ export default function RegionPage() {
     return communes.reduce((total, c) => total + c.totalRecolte, 0);
   }, [communes]);
 
+  const isInZone = useMemo(() => {
+    if (!profile || !regionId) return false;
+    if (['gestionnaire', 'gerant'].includes(profile.role)) return true;
+    if (profile.role === 'manager' && profile.region?.id === parseInt(regionId, 10)) return true;
+    return false;
+  }, [profile, regionId]);
+
   if (loading) {
     return <div className="text-center p-10">Chargement de la région...</div>;
   }
@@ -95,10 +103,13 @@ export default function RegionPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Section Titre et retour */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Région : <span className="text-green-700">{region?.nom || '...'}</span>
-        </h1>
+      <div className="flex justify-between items-start">
+        <div>
+          <ZoneBadge isInZone={isInZone} />
+          <h1 className="text-3xl font-bold text-gray-900 mt-2">
+            Région : <span className="text-green-700">{region?.nom || '...'}</span>
+          </h1>
+        </div>
         <button onClick={() => navigate('/gestionnaire')} className="text-sm text-green-600 hover:text-green-800 underline">
           &larr; Retour au tableau de bord
         </button>
@@ -174,11 +185,11 @@ export default function RegionPage() {
               {historiqueRecoltes.length > 0 ? (
                 historiqueRecoltes.sort((a, b) => new Date(b.date_saisie) - new Date(a.date_saisie)).map((recolte, index) => (
                   <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(recolte.date_saisie).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.communeNom}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.villageNom}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.date_saisie ? new Date(recolte.date_saisie).toLocaleString() : 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.commune_nom || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.village_nom || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{recolte.variete?.nom || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.quantite_kg ? recolte.quantite_kg.toLocaleString() : '0'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{recolte.profiles?.prenom || 'Utilisateur inconnu'}</td>
                   </tr>
                 ))

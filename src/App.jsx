@@ -5,20 +5,21 @@ import Formulaire from './Formulaire'
 import Dashboard from './Dashboard'
 import BenevoleDashboard from './BenevoleDashboard'
 import GestionnaireDashboard from './GestionnaireDashboard'
+import ManagerDashboard from './ManagerDashboard'
 import RegionPage from './RegionPage'
 import CommunePage from './CommunePage' // Ajout de l'import
 import VillagePage from './VillagePage'
 import SaisieRecoltePage from './SaisieRecoltePage'
 import HistoriquePersonnelPage from './HistoriquePersonnelPage'
+import LandingPage from './LandingPage'
 import MainLayout from './MainLayout'
 
 function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null) // Ajout pour stocker le profil utilisateur (et son rôle)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true);
   
   const navigate = useNavigate();
 
@@ -29,7 +30,7 @@ function App() {
       if (user) {
         const { data, error } = await supabase
           .from('profiles') // On suppose une table 'profiles' avec une colonne 'role'
-          .select('role, prenom, commune:commune_id (id, nom)')
+          .select('role, prenom, commune:commune_id (id, nom), region:region_id (id, nom)')
           .eq('id', user.id)
           .single()
         
@@ -46,14 +47,14 @@ function App() {
 
     // Écouteur de changement d'état d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthLoading(true);
       setSession(session) // Met à jour la session
       if (session?.user) {
-        fetchProfile(session.user) // Récupère le profil associé
+        fetchProfile(session.user).finally(() => setAuthLoading(false)); // Récupère le profil associé
       } else {
         // Si l'utilisateur se déconnecte, on réinitialise tout
         setProfile(null)
-        setEmail('')
-        setPassword('')
+        setAuthLoading(false);
         navigate('/'); // Redirige vers la page publique après déconnexion
       }
     })
@@ -62,14 +63,14 @@ function App() {
   }, [])
 
   // Fonction pour se connecter
-  const handleLogin = async (e) => {
+  const handleLogin = async (e, email, password) => {
     e.preventDefault()
     setLoading(true)
     setErreur(null)
     
     const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email,
+      password,
     })
 
     if (error) {
@@ -89,6 +90,9 @@ function App() {
 
   // --- Composant pour la page de Login ---
   const LoginPage = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
     return(
       <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
@@ -97,13 +101,14 @@ function App() {
             <p className="text-gray-500 mt-2">Espace Gérant - SCAT</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={(e) => handleLogin(e, email, password)} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700">Adresse Email</label>
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
                 required
                 className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
               />
@@ -115,6 +120,7 @@ function App() {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
                 className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
               />
@@ -153,9 +159,9 @@ function App() {
       case 'benevole':
         return <Navigate to="/benevole" replace />;
       case 'gestionnaire':
+      case 'gerant':
         return <Navigate to="/gestionnaire" replace />;
       case 'manager':
-      case 'gerant':
         return <Navigate to="/manager" replace />;
       default:
         return <Navigate to="/" replace />; // Page par défaut si rôle inconnu
@@ -163,14 +169,14 @@ function App() {
   };
 
   // --- Affichage principal ---
-  if (!profile) {
-    return <div className="text-center p-10 text-gray-500">Chargement du profil utilisateur...</div>
+  if (authLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-center p-10 text-gray-500">Chargement de l'application...</div>
   }
 
   return (
     <Routes>
       {/* Routes Publiques */}
-      <Route path="/" element={<Dashboard onLoginClick={() => navigate('/login')} />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={!session ? <LoginPage /> : <RoleBasedRedirect />} />
 
       {/* Routes Protégées */}
@@ -178,13 +184,13 @@ function App() {
         <Route element={<MainLayout profile={profile} loading={loading} onLogout={handleLogout} />}>
           <Route path="/benevole" element={profile.role === 'benevole' ? <BenevoleDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />          
           <Route path="/gestionnaire" element={['gestionnaire', 'gerant'].includes(profile.role) ? <GestionnaireDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
-          <Route path="/region/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <RegionPage /> : <Navigate to="/" />} />
-          <Route path="/commune/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <CommunePage /> : <Navigate to="/" />} />
-          <Route path="/village/:id" element={['gestionnaire', 'gerant'].includes(profile.role) ? <VillagePage /> : <Navigate to="/" />} />
-          <Route path="/saisir-recolte" element={<SaisieRecoltePage user={session.user} />} />
+          <Route path="/region/:id" element={<RegionPage profile={profile} />} />
+          <Route path="/commune/:id" element={<CommunePage profile={profile} />} />
+          <Route path="/village/:id" element={<VillagePage profile={profile} />} />
+          <Route path="/saisir-recolte" element={<SaisieRecoltePage user={session.user} profile={profile} />} />
           <Route path="/historique-personnel" element={<HistoriquePersonnelPage user={session.user} />} />
           {/* Ajoutez ici les routes pour manager, gerant, etc. */}
-          <Route path="/manager" element={<Dashboard isPublic={false} userRole={profile.role} />} />
+          <Route path="/manager" element={profile.role === 'manager' ? <ManagerDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
         </Route>
       )}
 

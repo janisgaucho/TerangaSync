@@ -77,7 +77,7 @@ export default function BenevoleDashboard({ profile, user }) {
         <h2 className="text-2xl font-bold text-gray-800 mb-6">
           Saisir une nouvelle récolte
         </h2>
-        <Formulaire user={user} />
+        <Formulaire user={user} profile={profile} />
       </div>
 
     </div>
