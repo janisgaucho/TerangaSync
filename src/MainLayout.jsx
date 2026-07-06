@@ -29,6 +29,8 @@ export default function MainLayout({ profile, loading, onLogout }) {
         return '/gestionnaire';
       case 'manager':
         return '/manager';
+      case 'admin':
+        return '/admin';
       default:
         return '/';
     }
@@ -62,23 +64,36 @@ export default function MainLayout({ profile, loading, onLogout }) {
                       onClick={() => setMenuOpen(false)}
                     >
                       Mon compte
-                    </Link>
-                    <Link
-                      to="/saisir-recolte"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Saisir une récolte
-                    </Link>
-                    <Link
-                      to="/historique-personnel"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Historique de récolte
-                    </Link>
+                    </Link>                    
+                    {profile.role === 'admin' ? (
+                      <>
+                        <Link to="/admin/lieux" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => setMenuOpen(false)}>
+                          Gestion des Lieux
+                        </Link>
+                        <Link to="/admin/utilisateurs" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => setMenuOpen(false)}>
+                          Utilisateurs
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          to="/saisir-recolte"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          Saisir une récolte
+                        </Link>
+                        <Link
+                          to="/historique-personnel"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          Historique de récolte
+                        </Link>
+                      </>
+                    )}
                     <button
                       onClick={() => { onLogout(); setMenuOpen(false); }}
                       disabled={loading}

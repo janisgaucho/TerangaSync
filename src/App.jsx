@@ -6,6 +6,10 @@ import Dashboard from './Dashboard'
 import BenevoleDashboard from './BenevoleDashboard'
 import GestionnaireDashboard from './GestionnaireDashboard'
 import ManagerDashboard from './ManagerDashboard'
+import AdminDashboard from './AdminDashboard' // Ajout de l'import
+import GestionLieux from './GestionLieux' // Ajout de l'import
+import GestionUtilisateurs from './GestionUtilisateurs' // Ajout de l'import
+import UtilisateurDetail from './UtilisateurDetail' // Ajout de l'import
 import RegionPage from './RegionPage'
 import CommunePage from './CommunePage' // Ajout de l'import
 import VillagePage from './VillagePage'
@@ -180,6 +184,8 @@ function App() {
         return <Navigate to="/gestionnaire" replace />;
       case 'manager':
         return <Navigate to="/manager" replace />;
+      case 'admin':
+        return <Navigate to="/admin" replace />;
       default:
         return <Navigate to="/" replace />; // Page par défaut si rôle inconnu
     }
@@ -209,6 +215,12 @@ function App() {
           <Route path="/mon-compte" element={<MonComptePage profile={profile} user={session.user} />} />
           {/* Ajoutez ici les routes pour manager, gerant, etc. */}
           <Route path="/manager" element={profile.role === 'manager' ? <ManagerDashboard profile={profile} user={session.user} /> : <Navigate to="/" />} />
+          {profile.role === 'admin' && (
+            <Route path="/admin" element={<AdminDashboard />} />
+          )}
+          <Route path="/admin/lieux" element={profile.role === 'admin' ? <GestionLieux /> : <Navigate to="/" />} />
+          <Route path="/admin/utilisateurs" element={profile.role === 'admin' ? <GestionUtilisateurs /> : <Navigate to="/" />} />
+          <Route path="/admin/utilisateurs/:id" element={profile.role === 'admin' ? <UtilisateurDetail /> : <Navigate to="/" />} />
         </Route>
       )}
 
