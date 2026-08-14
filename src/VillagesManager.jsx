@@ -27,7 +27,6 @@ export default function VillagesManager() {
       if (communesData.length > 0 && !communeSelectionnee) {
         setCommuneSelectionnee(communesData[0].id);
       }
-
       const { data: villagesData, error: villagesError } = await supabase
         .from('village')
         .select('*, commune:commune_id(id, nom)') // On récupère aussi l'ID de la commune
@@ -36,7 +35,7 @@ export default function VillagesManager() {
       setVillages(villagesData);
     } catch (err) {
       console.error("Erreur de chargement:", err);
-      setError("Impossible de charger les données.");
+      setError(`Impossible de charger les données: ${err.message || err}`);
     } finally {
       setIsLoading(false);
     }
@@ -53,13 +52,15 @@ export default function VillagesManager() {
       return;
     }
 
+    setError(null);
+    const parsedCommuneId = parseInt(communeSelectionnee, 10);
     const { error: insertError } = await supabase
       .from('village')
-      .insert([{ nom: nouveauVillage, commune_id: communeSelectionnee }]);
+      .insert([{ nom: nouveauVillage.trim(), commune_id: isNaN(parsedCommuneId) ? communeSelectionnee : parsedCommuneId }]);
 
     if (insertError) {
-      console.error("Erreur d'insertion:", insertError);
-      setError("Erreur lors de l'ajout du village.");
+      console.error("Erreur d'insertion Supabase:", insertError);
+      setError(`Erreur lors de l'ajout du village (${insertError.code || '403'}): ${insertError.message || 'Accès refusé par la politique de sécurité (RLS).'}`);
     } else {
       setNouveauVillage('');
       await fetchVillagesAndCommunes(); // Recharger la liste
@@ -68,14 +69,15 @@ export default function VillagesManager() {
 
   const handleDeleteVillage = async (villageId) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer ce village ?")) {
+      setError(null);
       const { error: deleteError } = await supabase
         .from('village')
         .delete()
         .eq('id', villageId);
 
       if (deleteError) {
-        console.error("Erreur de suppression:", deleteError);
-        setError("Erreur lors de la suppression du village.");
+        console.error("Erreur de suppression Supabase:", deleteError);
+        setError(`Erreur lors de la suppression (${deleteError.code || '403'}): ${deleteError.message}`);
       } else {
         setVillages(villages.filter(v => v.id !== villageId));
       }
@@ -86,7 +88,7 @@ export default function VillagesManager() {
   const handleStartEditing = (village) => {
     setEditingId(village.id);
     setEditNom(village.nom);
-    setEditCommuneId(village.commune.id); // Utilise l'ID de la commune jointe
+    setEditCommuneId(village.commune?.id || village.commune_id); // Utilise l'ID de la commune jointe
   };
 
   const handleCancelEditing = () => {
@@ -98,14 +100,17 @@ export default function VillagesManager() {
       alert("Le nom et la commune ne peuvent pas être vides.");
       return;
     }
+
+    setError(null);
+    const parsedEditCommuneId = parseInt(editCommuneId, 10);
     const { error: updateError } = await supabase
       .from('village')
-      .update({ nom: editNom, commune_id: editCommuneId })
+      .update({ nom: editNom.trim(), commune_id: isNaN(parsedEditCommuneId) ? editCommuneId : parsedEditCommuneId })
       .eq('id', id);
 
     if (updateError) {
-      console.error("Erreur de mise à jour:", updateError);
-      setError("Erreur lors de la mise à jour du village.");
+      console.error("Erreur de mise à jour Supabase:", updateError);
+      setError(`Erreur lors de la mise à jour (${updateError.code || '403'}): ${updateError.message}`);
     } else {
       setEditingId(null);
       await fetchVillagesAndCommunes(); // Recharger pour voir les changements
@@ -114,15 +119,29 @@ export default function VillagesManager() {
 
   // Filtre les villages en fonction de la commune sélectionnée
   const villagesFiltres = villages.filter(v => 
-    filtreCommune === '' || v.commune_id === parseInt(filtreCommune)
+    filtreCommune === '' || v.commune_id === parseInt(filtreCommune, 10) || v.commune_id === filtreCommune
   );
 
   if (isLoading) return <div className="text-center p-4">Chargement...</div>;
-  if (error) return <div className="text-center p-4 text-red-600">{error}</div>;
 
   return (
     <div className="bg-white shadow rounded-lg p-6 space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Gestion des Villages</h2>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md flex justify-between items-center">
+          <div>
+            <span className="font-semibold">Erreur : </span>
+            {error}
+          </div>
+          <button 
+            onClick={() => setError(null)} 
+            className="text-red-500 hover:text-red-700 font-bold ml-4"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Formulaire d'ajout */}
       <form onSubmit={handleAddVillage} className="flex items-end gap-4 p-4 bg-gray-50 rounded-md border">
